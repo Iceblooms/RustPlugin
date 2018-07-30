@@ -73,8 +73,31 @@ namespace Oxide.Plugins
         }
         #endregion
 
+        #region AdminCommands
+        [ChatCommand("ExpAdd")]
+        private void AdminExpGive(BasePlayer player, string command, string[] args)
+        {
+            if (player == null) return;
+            if (!player.IsAdmin) return;
+            int value;
+            if (!int.TryParse(args[0], out value)) return;
+            APCharacter pers;
+            APMembers.TryGetValue(player.userID, out pers);
+            pers.AddExpirience(value);
+            GuiInfo info;
+            if (!GUIInfo.TryGetValue(player.userID, out info))
+                CmdCuiShow(player);
+            else
+            {
+                DestroyUI(player, info.UIMain);
+                CmdCuiShow(player);
+            }
+
+        }
+        #endregion
+
         [ChatCommand("cuishow")]
-        private void CmdCuiShow(BasePlayer player, string command, string[] args)
+        private void CmdCuiShow(BasePlayer player /*,string command, string[] args*/)
         {
             GuiInfo info;
             if (player == null) return;
@@ -118,14 +141,14 @@ namespace Oxide.Plugins
                 }
             }, info.UIMain);
             elements.Add(CreateLabel($"AwesomePerks ({plVersion})", 1, height, "0.15", "0.85"), info.UIMain);
-            elements.Add(CreateLabel($"Никнейм - {pers.SteamName}, уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 1, height, "0.15", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Strength.ToString() + " - ?", 3, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Perception.ToString() + " - ?", 4, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Endurance.ToString() + " - ?", 5, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Charisma.ToString() + " - ?", 6, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Intelligense.ToString() + " - ?", 7, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Agility.ToString() + " - ?", 8, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Luck.ToString() + " - ?", 9, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel($"Никнейм - {pers.SteamName}, уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.15", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Strength.ToString() + pers.GetStrenght(), 3, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Perception.ToString() + pers.GetPerception(), 4, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Endurance.ToString() + pers.GetEndurance(), 5, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Charisma.ToString() + pers.GetChrisma(), 6, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Intelligense.ToString() + pers.GetIntelligense(), 7, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Agility.ToString() + pers.GetAgility(), 8, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(Characteristics.Luck.ToString() + pers.GetLuck(), 9, height, "0.09", "0.85"), info.UIMain);
             CuiHelper.AddUi(player, elements);
         }
         
@@ -391,11 +414,36 @@ namespace AP
             currentEXP = 0;
             expToNextLvl = currentLVL * (int)Math.Round((180 * lvlMultiplier) * lvlMultiplier); //определяемый кол-во опыта для сл. уровня
         }
-
-        private void GetSteamInfo()
+        #region Characteristic return
+        public int GetStrenght()
         {
-            
+            return this.Strength.CurrentLVL;
         }
+        public int GetPerception()
+        {
+            return this.Perception.CurrentLVL;
+        }
+        public int GetEndurance()
+        {
+            return this.Endurance.CurrentLVL;
+        }
+        public int GetChrisma()
+        {
+            return this.Charisma.CurrentLVL;
+        }
+        public int GetIntelligense()
+        {
+            return this.Intelligense.CurrentLVL;
+        }
+        public int GetAgility()
+        {
+            return this.Agility.CurrentLVL;
+        }
+        public int GetLuck()
+        {
+            return this.Luck.CurrentLVL;
+        }
+        #endregion
         #endregion
     }
 }
