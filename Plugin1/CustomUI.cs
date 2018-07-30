@@ -382,7 +382,7 @@ namespace AP.Keywords
         Charisma,
         Intelligense,
         Agility,
-        Luck
+        Luck  // uda4a
     }
 
     public enum Perks
