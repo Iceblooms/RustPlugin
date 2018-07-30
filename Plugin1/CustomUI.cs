@@ -215,7 +215,11 @@ namespace AP
             Type = stat;
             currentLVL = 1;
         }
-
+        /// <summary>
+        /// Увеличивает хар-ку, value - значение, на которое увеличивается, points  - ссылка на upgradePoints
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="points"></param>
         public void Increase(int value, ref int points)
         {
             if (currentLVL != MaxLVL)
@@ -358,6 +362,11 @@ namespace AP
             upgradePoints += 1; //добавляем поинты
             currentEXP = 0;
             expToNextLvl = currentLVL * (int)Math.Round((180 * lvlMultiplier) * lvlMultiplier); //определяемый кол-во опыта для сл. уровня
+        }
+
+        private void GetSteamInfo()
+        {
+            
         }
         #endregion
     }
