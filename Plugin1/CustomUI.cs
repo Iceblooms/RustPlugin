@@ -15,10 +15,12 @@ namespace Oxide.Plugins
     {
         private const string plVersion = "0.0.2";
         private readonly Dictionary<ulong, GuiInfo> GUIInfo;
+        private readonly Dictionary<ulong, APCharacter> APMembers;
 
         public CustomUI()
         {
             GUIInfo = new Dictionary<ulong, GuiInfo>();
+            APMembers = new Dictionary<ulong, APCharacter>();
         }
         
         #region Hooks
@@ -31,12 +33,34 @@ namespace Oxide.Plugins
                 DestroyUI(player, info.UIMain);
             }
         }
+
+        void OnServerInitialized()
+        {
+            foreach (var player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);
+        }
+
+        private void OnPlayerInit(BasePlayer player)
+        {
+            APCharacter apCharacter = FindOrAddCharacter(player);
+        }
         #endregion
 
         #region Utility
         private void DestroyUI(BasePlayer player, string name)
         {
             if (!string.IsNullOrEmpty(name)) CuiHelper.DestroyUi(player, name);
+        }
+
+        private APCharacter FindOrAddCharacter(BasePlayer player)
+        {
+            var userID = player.userID;
+            APCharacter Character;
+            if (player.displayName == null) return null;
+            if (player.userID < 70000000000) return null;
+            if (!APMembers.TryGetValue(userID, out Character))
+                APMembers[userID] = Character = new APCharacter(player);
+            return Character;      
         }
 
         private string GetAnchorMin(string xMin, string yMin)
@@ -53,6 +77,9 @@ namespace Oxide.Plugins
         private void CmdCuiShow(BasePlayer player, string command, string[] args)
         {
             GuiInfo info;
+            if (player == null) return;
+            APCharacter pers;
+            APMembers.TryGetValue(player.userID, out pers);
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
             const float height = 1 / (6f * 1.5f);
@@ -91,7 +118,7 @@ namespace Oxide.Plugins
                 }
             }, info.UIMain);
             elements.Add(CreateLabel($"AwesomePerks ({plVersion})", 1, height, "0.15", "0.85"), info.UIMain);
-            elements.Add(CreateLabel($"Уровень -  ({plVersion})", 1, height, "0.15", "0.85"), info.UIMain);
+            elements.Add(CreateLabel($"Никнейм - {pers.SteamName}, уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 1, height, "0.15", "0.85"), info.UIMain);
             elements.Add(CreateLabel(Characteristics.Strength.ToString() + " - ?", 3, height, "0.09", "0.85"), info.UIMain);
             elements.Add(CreateLabel(Characteristics.Perception.ToString() + " - ?", 4, height, "0.09", "0.85"), info.UIMain);
             elements.Add(CreateLabel(Characteristics.Endurance.ToString() + " - ?", 5, height, "0.09", "0.85"), info.UIMain);
@@ -242,8 +269,9 @@ namespace AP
         public int CurrentEXP { get { return currentEXP; } }
         private ulong ownerId; // Rust айди игрока
         public ulong OwnerId { get { return ownerId; } }
+        public string SteamName { get; set; }
         private int upgradePoints; //количество очков улучшения
-        public int UpgradePoint { get { return upgradePoints; } }
+        public int UpgradePoints { get { return upgradePoints; } }
         private int expToNextLvl; //общее количество опыта для повышения уровня
         public int ExpToNextLvl { get { return expToNextLvl; } }
         private float earnedExpPercent;//количество опыта в процентах, которого не хватает до уровня
@@ -262,9 +290,10 @@ namespace AP
 
         public List<Perk> Perks;
 
-        public APCharacter(ulong owner)
+        public APCharacter(BasePlayer player)
         {
-            ownerId = owner;
+            ownerId = player.userID;
+            this.SteamName = player.displayName;
             currentLVL = 0;
             currentEXP = 0;
             upgradePoints = 5;
@@ -344,7 +373,6 @@ namespace AP
                     break;
             }
         }
-
         #region Utils
         /// <summary>
         /// Вычисление прогресса опыта в процентах
