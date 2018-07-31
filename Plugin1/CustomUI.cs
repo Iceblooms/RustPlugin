@@ -13,6 +13,7 @@ namespace Oxide.Plugins
     [Info("TestPlugin","WP","0.0.2")]
     internal class CustomUI : RustPlugin
     {
+        private bool isProfileUIActive = false;
         private const string plVersion = "0.0.2";
         private readonly Dictionary<ulong, GuiInfo> GUIInfo;
         private readonly Dictionary<ulong, APCharacter> APMembers;
@@ -93,7 +94,7 @@ namespace Oxide.Plugins
                 type = (Characteristics)Enum.Parse(typeof(Characteristics), args[0], true);
                 value = int.Parse(args[1]);
                 pers.IncreaseCharacteristic(type, value);
-                UpdateMain(player);
+                ProfileUI(player);
             }
             catch
             {
@@ -135,6 +136,8 @@ namespace Oxide.Plugins
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
             const float height = 1 / (6f * 1.5f);
+            if (!string.IsNullOrEmpty(info.UIMain))
+                DestroyUI(player, info.UIMain);
             var elements = new CuiElementContainer();
             info.UIMain = elements.Add(new CuiPanel
             {
@@ -172,13 +175,19 @@ namespace Oxide.Plugins
             elements.Add(CreateLabel($"{pers.SteamName}", 1, height, "0.05", "0.85"), info.UIMain);
             elements.Add(CreateLabel($"Уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.05", "0.85"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Strength), 3, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup strength 1", 3, height), info.UIMain);
+            elements.Add(CreateButton("statup strength 1", 3, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Perception), 4, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup perception 1", 4, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Endurance), 5, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup endurance 1", 5, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Charisma), 6, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup charisma 1", 6, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Intelligense), 7, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup intelligense 1", 7, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Agility), 8, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup agility 1", 8, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Luck), 9, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup luck 1", 9, height, "+", 15, "0.86", "0.92"), info.UIMain);
             CuiHelper.AddUi(player, elements);
         }
         
@@ -199,7 +208,7 @@ namespace Oxide.Plugins
             if (player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
                 timer.Once(1, () => InitializeGui(player));
             else
-            UpdateHUD(player);
+            ProgressUI(player);
         }
         private CuiLabel CreateLabel(string text, int i, float rowHeight, string xMin = "0", string xMax = "1", TextAnchor txtAnchor = TextAnchor.MiddleLeft)
         {
@@ -258,7 +267,7 @@ namespace Oxide.Plugins
             };
         }
         
-        private void UpdateHUD(BasePlayer player) //панелька опыта
+        private void ProgressUI(BasePlayer player) //панелька опыта
         {
             if (player == null) return;
             GuiInfo info;
@@ -270,7 +279,19 @@ namespace Oxide.Plugins
             var elements = new CuiElementContainer();
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
-            info.UIHud = elements.Add(CreatePanel("0,7", "0,825", "0,115", "0,2"));
+            info.UIHud = elements.Add(new CuiPanel
+            {
+                Image =
+                {
+                    Color = "0.3451 0.5529 0.7725 0.75"
+                },
+                RectTransform =
+                {
+                    AnchorMin = GetAnchorMin("0.75","0.85"),
+                    AnchorMax = GetAnchorMax("0.15","0.225")
+                },
+                CursorEnabled = false
+            });
             elements.Add(CreateLabel(
                                         $"Прогресс - {pers.EarnedExpPercent}, уровень - {pers.CurrentLVL}",
                                         1, height, "0.1", "0.9", TextAnchor.MiddleCenter), info.UIHud);
@@ -281,7 +302,7 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, elements);
         }
 
-        private void UpdateMain(BasePlayer player)
+        private void ProfileUI(BasePlayer player)
         {
             GuiInfo info;
             if (player == null) return;
@@ -329,13 +350,19 @@ namespace Oxide.Plugins
             elements.Add(CreateLabel($"{pers.SteamName}", 1, height, "0.05", "0.85"), info.UIMain);
             elements.Add(CreateLabel($"Уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.05", "0.85"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Strength), 3, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup strength 1", 3, height), info.UIMain);
+            elements.Add(CreateButton("statup strength 1", 3, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Perception), 4, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup perception 1", 4, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Endurance), 5, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup endurance 1", 5, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Charisma), 6, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup charisma 1", 6, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Intelligense), 7, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup intelligense 1", 7, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Agility), 8, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup agility 1", 8, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Luck), 9, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup luck 1", 9, height, "+", 15, "0.86", "0.92"), info.UIMain);
             CuiHelper.AddUi(player, elements);
         }
         #endregion
