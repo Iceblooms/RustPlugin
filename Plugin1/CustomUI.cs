@@ -224,7 +224,7 @@ namespace Oxide.Plugins
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
 
-            info.UIHud = elements.Add(CreatePanel("0.5", "0.5", "0.8","0.8"));
+            info.UIHud = elements.Add(CreatePanel("0.5", "0.5", "0.8", "0.8"));
             elements.Add(CreateLabel($"Прогресс - {pers.EarnedExpPercent}, уровень - {pers.CurrentLVL}",
                                      1, height, "0.1", "0.9", TextAnchor.MiddleCenter), info.UIHud);
 
