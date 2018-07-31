@@ -42,7 +42,9 @@ namespace Oxide.Plugins
 
         private void OnPlayerInit(BasePlayer player)
         {
+            if (player == null) return;
             APCharacter apCharacter = FindOrAddCharacter(player);
+            InitializeGui(player);
         }
         #endregion
 
@@ -70,6 +72,33 @@ namespace Oxide.Plugins
         private string GetAnchorMax(string xMax, string yMax)
         {
             return string.Concat(string.Concat(xMax, " "), yMax);
+        }
+        
+        private string Print(string args) // метод для делегатов APCharacter
+        {
+            return "NaN";
+        }
+        #endregion
+
+        #region Commands
+        [ChatCommand("statup")]
+        void StatUp(BasePlayer player, string command, string[] args)
+        {
+            if (args.Length == 0) return; // не указаны параметры команды
+            Characteristics type;
+            APCharacter pers = FindOrAddCharacter(player);
+            int value = 0;
+            try
+            {
+                type = (Characteristics)Enum.Parse(typeof(Characteristics), args[0], true);
+                value = int.Parse(args[1]);
+                pers.IncreaseCharacteristic(type, value);
+                UpdateMain(player);
+            }
+            catch
+            {
+                Puts("Unable to convert args[]!");
+            }    
         }
         #endregion
 
@@ -140,15 +169,16 @@ namespace Oxide.Plugins
                     Color = "0.0 0.0 0.0 1.0"
                 }
             }, info.UIMain);
-            elements.Add(CreateLabel($"AwesomePerks ({plVersion})", 1, height, "0.15", "0.85"), info.UIMain);
-            elements.Add(CreateLabel($"Никнейм - {pers.SteamName}, уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.15", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Strength.ToString() + pers.GetStrenght(), 3, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Perception.ToString() + pers.GetPerception(), 4, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Endurance.ToString() + pers.GetEndurance(), 5, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Charisma.ToString() + pers.GetChrisma(), 6, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Intelligense.ToString() + pers.GetIntelligense(), 7, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Agility.ToString() + pers.GetAgility(), 8, height, "0.09", "0.85"), info.UIMain);
-            elements.Add(CreateLabel(Characteristics.Luck.ToString() + pers.GetLuck(), 9, height, "0.09", "0.85"), info.UIMain);
+            elements.Add(CreateLabel($"{pers.SteamName}", 1, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel($"Уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Strength), 3, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup strength 1", 3, height), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Perception), 4, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Endurance), 5, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Charisma), 6, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Intelligense), 7, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Agility), 8, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Luck), 9, height, "0.05", "0.85"), info.UIMain);
             CuiHelper.AddUi(player, elements);
         }
         
@@ -162,7 +192,16 @@ namespace Oxide.Plugins
         }
 
         #region GUI
-        private CuiLabel CreateLabel(string text, int i, float rowHeight, string xMin = "0", string xMax = "1")
+
+        private void InitializeGui(BasePlayer player)
+        {
+            if (player == null) return;
+            if (player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+                timer.Once(1, () => InitializeGui(player));
+            else
+            UpdateHUD(player);
+        }
+        private CuiLabel CreateLabel(string text, int i, float rowHeight, string xMin = "0", string xMax = "1", TextAnchor txtAnchor = TextAnchor.MiddleLeft)
         {
             return new CuiLabel
             {
@@ -170,7 +209,7 @@ namespace Oxide.Plugins
                 {
                     Text = text,
                     FontSize = 15,
-                    Align = TextAnchor.MiddleLeft,
+                    Align = txtAnchor,
                     Color = "1.0 1.0 0.0 1.0"
                 },
                 RectTransform =
@@ -214,8 +253,90 @@ namespace Oxide.Plugins
                 {
                     AnchorMin = GetAnchorMin(xMin, yMin),
                     AnchorMax = GetAnchorMax(xMax, yMax)
-                }
+                },
+                CursorEnabled = false
             };
+        }
+        
+        private void UpdateHUD(BasePlayer player) //панелька опыта
+        {
+            if (player == null) return;
+            GuiInfo info;
+            if (!GUIInfo.TryGetValue(player.userID, out info))
+                GUIInfo[player.userID] = info = new GuiInfo();
+            var pers = FindOrAddCharacter(player);
+            if (pers == null) return;
+            const float height = 1 / (6f * 1.5f);
+            var elements = new CuiElementContainer();
+            if (!string.IsNullOrEmpty(info.UIHud))
+                DestroyUI(player, info.UIHud);
+            info.UIHud = elements.Add(CreatePanel("0,7", "0,825", "0,115", "0,2"));
+            elements.Add(CreateLabel(
+                                        $"Прогресс - {pers.EarnedExpPercent}, уровень - {pers.CurrentLVL}",
+                                        1, height, "0.1", "0.9", TextAnchor.MiddleCenter), info.UIHud);
+            elements.Add(CreatePanel("0.09", "0.91", "0.11", "0.16", "0.4118 0.0588 1.0 1.0"), info.UIHud);
+            elements.Add(CreateLabel(
+                                        $"{pers.CurrentEXP}/{pers.ExpToNextLvl}",
+                                        1, height, "0", "1", TextAnchor.MiddleCenter), info.UIHud);
+            CuiHelper.AddUi(player, elements);
+        }
+
+        private void UpdateMain(BasePlayer player)
+        {
+            GuiInfo info;
+            if (player == null) return;
+            APCharacter pers;
+            APMembers.TryGetValue(player.userID, out pers);
+            if (!GUIInfo.TryGetValue(player.userID, out info))
+                GUIInfo[player.userID] = info = new GuiInfo();
+            const float height = 1 / (6f * 1.5f);
+            if (!string.IsNullOrEmpty(info.UIMain))
+                DestroyUI(player, info.UIMain);
+            var elements = new CuiElementContainer();
+            info.UIMain = elements.Add(new CuiPanel
+            {
+                Image =
+                {
+                    Color = "0.3451 0.5529 0.7725 0.75"
+                },
+                RectTransform =
+                {
+                    AnchorMin = GetAnchorMin("0.75","0.35"),
+                    AnchorMax = GetAnchorMax("0.98","0.75")
+                },
+                CursorEnabled = true
+            });
+            elements.Add(new CuiButton
+            {
+                Button =
+                {
+                    Close = info.UIMain,
+                    Color = "1.0 1.0 0.6078 1.0"
+                },
+                RectTransform =
+                {
+                    AnchorMin = GetAnchorMin("0.9","0.9"),
+                    AnchorMax = GetAnchorMax("0.99","0.99")
+                },
+                Text =
+                {
+                    Text = "X",
+                    FontSize = 20,
+                    Align = TextAnchor.MiddleCenter,
+                    Color = "0.0 0.0 0.0 1.0"
+                }
+            }, info.UIMain);
+            elements.Add(CreateLabel($"{pers.SteamName}", 1, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel($"Уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Strength), 3, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateButton("statup strength 1", 3, height), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Perception), 4, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Endurance), 5, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Charisma), 6, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Intelligense), 7, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Agility), 8, height, "0.05", "0.85"), info.UIMain);
+            elements.Add(CreateLabel(pers.GetStatString(Characteristics.Luck), 9, height, "0.05", "0.85"), info.UIMain);
+            CuiHelper.AddUi(player, elements);
         }
         #endregion
     }
@@ -223,7 +344,7 @@ namespace Oxide.Plugins
     public class GuiInfo
     {
         public string UIMain { get; set; }
-        public string UIContent { get; set; }
+        public string UIHud { get; set; }
     }  
 }
 
@@ -442,6 +563,28 @@ namespace AP
         public int GetLuck()
         {
             return this.Luck.CurrentLVL;
+        }
+
+        public string GetStatString(Characteristics type)
+        {
+            switch (type)
+            {
+                case Characteristics.Strength:
+                    return string.Concat(string.Concat(this.Strength.Name, " - "), this.Strength.CurrentLVL.ToString());
+                case Characteristics.Perception:
+                    return string.Concat(string.Concat(this.Perception.Name, " - "), this.Perception.CurrentLVL.ToString());
+                case Characteristics.Endurance:
+                    return string.Concat(string.Concat(this.Endurance.Name, " - "), this.Endurance.CurrentLVL.ToString());
+                case Characteristics.Charisma:
+                    return string.Concat(string.Concat(this.Charisma.Name, " - "), this.Charisma.CurrentLVL.ToString());
+                case Characteristics.Intelligense:
+                    return string.Concat(string.Concat(this.Intelligense.Name, " - "), this.Intelligense.CurrentLVL.ToString());
+                case Characteristics.Agility:
+                    return string.Concat(string.Concat(this.Agility.Name, " - "), this.Agility.CurrentLVL.ToString());
+                case Characteristics.Luck:
+                    return string.Concat(string.Concat(this.Luck.Name, " - "), this.Luck.CurrentLVL.ToString());
+            }
+            return "Unknown parameter";
         }
         #endregion
         #endregion
