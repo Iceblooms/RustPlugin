@@ -246,7 +246,6 @@ namespace Oxide.Plugins
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
             var pers = FindOrAddCharacter(player);
-            const float height = 1 / (6f * 1.5f);
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
             var elements = new CuiElementContainer();
@@ -283,7 +282,7 @@ namespace Oxide.Plugins
                     Color = "0.0 0.0 0.0 0.0"
                 }
             }, info.UIHud);
-            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, height, "0.05", "0.95", TextAnchor.MiddleCenter, 10), info.UIHud);
+            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, 0.68f, "0.05", "0.95", TextAnchor.MiddleCenter, 10), info.UIHud);
             elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.35", $"0,1686 {Math.Round(pers.ExpPercent / 100)} 0,4314, 0.9"), info.UIHud);
             elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 2, 1.55f, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
             CuiHelper.AddUi(player, elements);
