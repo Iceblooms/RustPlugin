@@ -31,6 +31,7 @@ namespace Oxide.Plugins
                 GuiInfo info;
                 if (!GUIInfo.TryGetValue(player.userID, out info)) continue;
                 DestroyUI(player, info.UIMain);
+                
             }
         }
 
@@ -49,6 +50,15 @@ namespace Oxide.Plugins
             pers.RegStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
             pers.RegStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
             InitializeGui(player);
+        }
+
+        void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            if (player == null) return;
+            APCharacter pers = FindOrAddCharacter(player);
+            pers.UnregStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
+            pers.UnregStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
+            pers.UnregStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
         }
         #endregion
 
@@ -282,9 +292,9 @@ namespace Oxide.Plugins
                     Color = "0.0 0.0 0.0 0.0"
                 }
             }, info.UIHud);
-            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, 0.68f, "0.05", "0.95", TextAnchor.MiddleCenter, 10), info.UIHud);
+            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, 0.68f, "0.05", "0.95", TextAnchor.MiddleCenter, 17), info.UIHud);
             elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.35", $"0,1686 {Math.Round(pers.ExpPercent / 100)} 0,4314, 0.9"), info.UIHud);
-            elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 2, 1.55f, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
+            elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 1, 1.55f, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
             CuiHelper.AddUi(player, elements);
         }
         private void ProfileUI(BasePlayer player)
@@ -653,9 +663,19 @@ namespace AP
         {
             _lvlHandler += del;
         }
+        public void UnregStateHandler(CharacterLvlUpHandler del)
+        {
+            _handler(BasePlayer.FindByID(OwnerId), $"Now you can not receive messages about changes to the character in the chat");
+            _handler -= del;
+        }
         public void RegStateHandler(CharacterExpHandler del)
         {
             _expHandler += del;
+        }
+        public void UnregStateHandler(CharacterExpHandler del)
+        {
+            _handler(BasePlayer.FindByID(OwnerId), $"Now you can not receive messages about changes to the character in the chat");
+            _handler -= del;
         }
         #endregion
     }
