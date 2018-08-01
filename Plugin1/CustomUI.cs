@@ -46,7 +46,8 @@ namespace Oxide.Plugins
             APCharacter pers = FindOrAddCharacter(player);
             if(pers.isChatSubscriber)
                 pers.RegStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
-            pers.RegStateHandler(OnCharacterLvlUp);
+            pers.RegStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
+            pers.RegStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
             InitializeGui(player);
         }
         #endregion
@@ -181,14 +182,14 @@ namespace Oxide.Plugins
             else
             ProgressUI(player);
         }
-        private CuiLabel CreateLabel(string text, int i, float rowHeight, string xMin = "0", string xMax = "1", TextAnchor txtAnchor = TextAnchor.MiddleLeft)
+        private CuiLabel CreateLabel(string text, int i, float rowHeight, string xMin = "0", string xMax = "1", TextAnchor txtAnchor = TextAnchor.MiddleLeft, int fontSize = 15)
         {
             return new CuiLabel
             {
                 Text =
                 {
                     Text = text,
-                    FontSize = 15,
+                    FontSize = fontSize,
                     Align = txtAnchor,
                     Color = "1.0 1.0 0.0 1.0"
                 },
@@ -257,8 +258,8 @@ namespace Oxide.Plugins
                 },
                 RectTransform =
                 {
-                    AnchorMin = GetAnchorMin("0.60","0.15"),
-                    AnchorMax = GetAnchorMax("0.75","0.25")
+                    AnchorMin = GetAnchorMin("0.65","0.024"),
+                    AnchorMax = GetAnchorMax("0.83","0.135")
                 },
                 CursorEnabled = false
             });
@@ -282,9 +283,9 @@ namespace Oxide.Plugins
                     Color = "0.0 0.0 0.0 0.0"
                 }
             }, info.UIHud);
-            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, height, "0.05","0.95", TextAnchor.MiddleCenter),info.UIHud);
-            elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.3", $"0,1686 {Math.Round(pers.ExpPercent/100)} 0,4314, 0.9"), info.UIHud);
-            elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 1, 1, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
+            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, height, "0.05", "0.95", TextAnchor.MiddleCenter, 10), info.UIHud);
+            elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.35", $"0,1686 {Math.Round(pers.ExpPercent / 100)} 0,4314, 0.9"), info.UIHud);
+            elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 2, 1.55f, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
             CuiHelper.AddUi(player, elements);
         }
         private void ProfileUI(BasePlayer player)
@@ -429,6 +430,8 @@ namespace AP
         CharacterStateHandler _handler;
         public delegate void CharacterLvlUpHandler(APCharacter pers);
         CharacterLvlUpHandler _lvlHandler;
+        public delegate void CharacterExpHandler(APCharacter pers);
+        CharacterExpHandler _expHandler;
         public bool isChatSubscriber { get; set; } //выводить сообщения в чат или нет
         private int currentLVL; //текущий уровень персонажа
         public int CurrentLVL { get { return currentLVL; } }
@@ -488,6 +491,8 @@ namespace AP
             //при оверэкспе повышаем уровень и переносим остаток на сл. уровень
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"You got {value} experience points!");
+            if (_lvlHandler != null)
+                _lvlHandler(this);
             if (currentEXP + value > expToNextLvl)
             {
                 int temp = value - (expToNextLvl - currentEXP);
@@ -648,6 +653,10 @@ namespace AP
         public void RegStateHandler(CharacterLvlUpHandler del)
         {
             _lvlHandler += del;
+        }
+        public void RegStateHandler(CharacterExpHandler del)
+        {
+            _expHandler += del;
         }
         #endregion
     }
