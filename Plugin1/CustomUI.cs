@@ -665,8 +665,7 @@ namespace AP
         }
         public void UnregStateHandler(CharacterLvlUpHandler del)
         {
-            _handler(BasePlayer.FindByID(OwnerId), $"Now you can not receive messages about changes to the character in the chat");
-            _handler -= del;
+            _lvlHandler -= del;
         }
         public void RegStateHandler(CharacterExpHandler del)
         {
@@ -674,8 +673,7 @@ namespace AP
         }
         public void UnregStateHandler(CharacterExpHandler del)
         {
-            _handler(BasePlayer.FindByID(OwnerId), $"Now you can not receive messages about changes to the character in the chat");
-            _handler -= del;
+            _expHandler -= del;
         }
         #endregion
     }
