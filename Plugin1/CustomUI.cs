@@ -10,13 +10,12 @@ using AP.Keywords;
 
 namespace Oxide.Plugins
 {
-    [Info("TestPlugin","WP","0.0.2")]
+    [Info("TestPlugin","WP","0.0.3")]
     internal class CustomUI : RustPlugin
     {
-        private bool isProfileUIActive = false;
         private const string plVersion = "0.0.2";
         private readonly Dictionary<ulong, GuiInfo> GUIInfo;
-        private readonly Dictionary<ulong, APCharacter> APMembers;
+        private readonly Dictionary<ulong, APCharacter> APMembers; //тут должны храниться данные игроков
 
         public CustomUI()
         {
@@ -44,7 +43,9 @@ namespace Oxide.Plugins
         private void OnPlayerInit(BasePlayer player)
         {
             if (player == null) return;
-            APCharacter apCharacter = FindOrAddCharacter(player);
+            APCharacter pers = FindOrAddCharacter(player);
+            if(pers.isChatSubscriber)
+                pers.RegHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             InitializeGui(player);
         }
         #endregion
@@ -75,9 +76,10 @@ namespace Oxide.Plugins
             return string.Concat(string.Concat(xMax, " "), yMax);
         }
         
-        private string Print(string args) // метод для делегатов APCharacter
+        private void ChatMessage(BasePlayer player, string mes) // метод для делегатов APCharacter
         {
-            return "NaN";
+            if (player?.net == null) return;
+            player.ChatMessage(string.Format("test", mes));
         }
         #endregion
 
@@ -102,6 +104,28 @@ namespace Oxide.Plugins
                 Puts("Unable to convert args[]!");
             }    
         } //работает, нужны сообщения о прокачке, нехватке очков и т.д. (делегат)
+
+        [ChatCommand("chatmsg")]
+        private void ConfigureChat(BasePlayer player, string[] args)//включение и отключение сообщений в чате
+        {
+            if (player == null) return;
+            var pers = FindOrAddCharacter(player);
+            if (args[0] == "on")
+            {
+                if (pers.isChatSubscriber) return;
+                pers.isChatSubscriber = true;
+                pers.RegHandler(ChatMessage);
+                return;
+            }
+            if (args[0] == "off")
+            {
+                if (!pers.isChatSubscriber) return;
+                pers.isChatSubscriber = false;
+                pers.UnregHandler(ChatMessage);
+                return;
+            }
+            ChatMessage(player, "Unknown parameter");
+        }
         #endregion
 
         #region AdminCommands
@@ -367,6 +391,9 @@ namespace AP
 
     public class APCharacter
     {
+        public delegate void CharacterStateHandler(BasePlayer player, string mes);
+        CharacterStateHandler _handler;
+        public bool isChatSubscriber { get; set; } //выводить сообщения в чат или нет
         private int currentLVL; //текущий уровень персонажа
         public int CurrentLVL { get { return currentLVL; } }
         private int currentEXP; //текущее количество опыта персонажа
@@ -401,6 +428,7 @@ namespace AP
             currentLVL = 0;
             currentEXP = 0;
             upgradePoints = 5;
+            isChatSubscriber = true;
             expToNextLvl = (int)Math.Round(180*lvlMultiplier);
             Strength = new Characteristic(Characteristics.Strength);
             Perception = new Characteristic(Characteristics.Perception);
@@ -421,6 +449,8 @@ namespace AP
             if (value < 0) return false; //если передано отрицательное число
             if (currentLVL == maxLVL) return false; // если достигнут максимальный уровень
             //при оверэкспе повышаем уровень и переносим остаток на сл. уровень
+            if (_handler != null)
+                _handler(BasePlayer.FindByID(OwnerId), $"You got {value} experience points!");
             if (currentEXP + value > expToNextLvl)
             {
                 int temp = value - (expToNextLvl - currentEXP);
@@ -449,31 +479,45 @@ namespace AP
         {
             if (this.upgradePoints < value)
             {
-                Console.WriteLine("Not enough points!");
+                if (_handler != null)
+                    _handler(BasePlayer.FindByID(OwnerId), $"Not enough skill points!");
                 return;
             }
             switch (type)
             {
                 case Characteristics.Strength:
                     this.Strength.Increase(value, ref upgradePoints);
+                    if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Strength is increased by {value}");
                     break;
                 case Characteristics.Perception:
                     this.Perception.Increase(value, ref upgradePoints);
+                    if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Perception is increased by {value}");
                     break;
                 case Characteristics.Endurance:
                     this.Endurance.Increase(value, ref upgradePoints);
+                    if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Endurance is increased by {value}");
                     break;
                 case Characteristics.Charisma:
                     this.Charisma.Increase(value, ref upgradePoints);
+                    if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Charisma is increased by {value}");
                     break;
                 case Characteristics.Intelligense:
                     this.Intelligense.Increase(value, ref upgradePoints);
+                    if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Intelligense is increased by {value}");
                     break;
                 case Characteristics.Agility:
                     this.Agility.Increase(value, ref upgradePoints);
+                    if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Agility is increased by {value}");
                     break;
                 case Characteristics.Luck:
-                    this.Luck.Increase(value, ref upgradePoints);
+                    this.Luck.Increase(value, ref upgradePoints); if (_handler != null)
+                        _handler(BasePlayer.FindByID(OwnerId), $"Your Luck is increased by {value}");
                     break;
             }
         }
@@ -491,7 +535,11 @@ namespace AP
         private void CharacterLVLUP()
         {
             currentLVL += 1; //добавляем уровень
+            if (_handler != null)
+                _handler(BasePlayer.FindByID(OwnerId), $"Congratulations, you have reached level {CurrentLVL}!");
             upgradePoints += 1; //добавляем поинты
+            if (_handler != null)
+                _handler(BasePlayer.FindByID(OwnerId), $"You have {UpgradePoints} skill points!");
             currentEXP = 0;
             expToNextLvl = currentLVL * (int)Math.Round((180 * lvlMultiplier) * lvlMultiplier); //определяемый кол-во опыта для сл. уровня
         }
@@ -547,6 +595,17 @@ namespace AP
             return "Unknown parameter";
         }
         #endregion
+
+        public void RegHandler(CharacterStateHandler del)
+        {
+            _handler += del;
+            _handler(BasePlayer.FindByID(OwnerId), $"Now you can receive messages about changes to the character in the chat");
+        }
+        public void UnregHandler(CharacterStateHandler del)
+        {
+            _handler(BasePlayer.FindByID(OwnerId), $"Now you can not receive messages about changes to the character in the chat");
+            _handler -= del;
+        }
         #endregion
     }
 }
