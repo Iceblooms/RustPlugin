@@ -45,7 +45,8 @@ namespace Oxide.Plugins
             if (player == null) return;
             APCharacter pers = FindOrAddCharacter(player);
             if(pers.isChatSubscriber)
-                pers.RegHandler(new APCharacter.CharacterStateHandler(ChatMessage));
+                pers.RegStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
+            pers.RegStateHandler(OnCharacterLvlUp);
             InitializeGui(player);
         }
         #endregion
@@ -79,12 +80,20 @@ namespace Oxide.Plugins
         private void ChatMessage(BasePlayer player, string mes) // метод для делегатов APCharacter
         {
             if (player?.net == null) return;
-            player.ChatMessage(string.Format("test", mes));
+            player.ChatMessage(mes);
+        }
+        private void OnCharacterLvlUp(APCharacter pers) //lvlup handler
+        {
+            ProfileUI(BasePlayer.FindByID(pers.OwnerId));
+        }
+        private void OnExpValueChanged(APCharacter pers)
+        {
+            ProgressUI(BasePlayer.FindByID(pers.OwnerId));
         }
         #endregion
 
         #region Commands
-        [ConsoleCommand("statup")]
+        [ConsoleCommand("statup.cmd")]
         void StatUp(ConsoleSystem.Arg args)
         {
             var player = args.Player();
@@ -103,34 +112,38 @@ namespace Oxide.Plugins
             {
                 Puts("Unable to convert args[]!");
             }    
-        } //работает, нужны сообщения о прокачке, нехватке очков и т.д. (делегат)
+        } //работает
 
-        [ChatCommand("chatmsg")]
-        private void ConfigureChat(BasePlayer player, string[] args)//включение и отключение сообщений в чате
+        [ChatCommand("announce")]
+        private void ConfigureChat(BasePlayer player, string command, string[] args)//включение и отключение сообщений в чате
         {
             if (player == null) return;
             var pers = FindOrAddCharacter(player);
             if (args[0] == "on")
             {
-                if (pers.isChatSubscriber) return;
-                pers.isChatSubscriber = true;
-                pers.RegHandler(ChatMessage);
-                return;
+                if (!pers.isChatSubscriber)
+                {
+                    pers.isChatSubscriber = true;
+                    pers.RegStateHandler(ChatMessage);
+                    return;
+                }
             }
             if (args[0] == "off")
             {
-                if (!pers.isChatSubscriber) return;
-                pers.isChatSubscriber = false;
-                pers.UnregHandler(ChatMessage);
-                return;
+                if (pers.isChatSubscriber)
+                {
+                    pers.isChatSubscriber = false;
+                    pers.UnregStateHandler(ChatMessage);
+                    return;
+                }
             }
             ChatMessage(player, "Unknown parameter");
         }
         #endregion
 
         #region AdminCommands
-        [ChatCommand("ExpAdd")]
-        private void AdminExpGive(BasePlayer player, string command, string[] args)
+        [ChatCommand("addexp")]
+        private void AdminExpGive(BasePlayer player, string command, string[] args) //работает
         {
             if (player == null) return;
             if (!player.IsAdmin) return;
@@ -139,15 +152,6 @@ namespace Oxide.Plugins
             APCharacter pers;
             APMembers.TryGetValue(player.userID, out pers);
             pers.AddExpirience(value);
-            GuiInfo info;
-            if (!GUIInfo.TryGetValue(player.userID, out info))
-                CmdCuiShow(player);
-            else
-            {
-                DestroyUI(player, info.UIMain);
-                CmdCuiShow(player);
-            }
-
         }
         #endregion
 
@@ -158,7 +162,7 @@ namespace Oxide.Plugins
             ProfileUI(player);
         }
         
-        [ConsoleCommand("Guihide.cmd")]
+        [ConsoleCommand("guihide")]
         private void CmdCuiHide(ConsoleSystem.Arg arg)
         {
             BasePlayer player = BasePlayer.Find(arg.Args[0]);
@@ -237,28 +241,52 @@ namespace Oxide.Plugins
         [ChatCommand("expshow")]
         private void ProgressUI(BasePlayer player) //панелька опыта, не отображается
         {
-            if (player == null) return;
             GuiInfo info;
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
             var pers = FindOrAddCharacter(player);
-            if (pers == null) return;
             const float height = 1 / (6f * 1.5f);
-            var elements = new CuiElementContainer();
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
-
-            info.UIHud = elements.Add(CreatePanel("0.5", "0.5", "0.8", "0.8"));
-            elements.Add(CreateLabel($"Прогресс - {pers.EarnedExpPercent}, уровень - {pers.CurrentLVL}",
-                                     1, height, "0.1", "0.9", TextAnchor.MiddleCenter), info.UIHud);
-
-            elements.Add(CreatePanel("0.09", "0.91", "0.11", "0.16", "0.4118 0.0588 1.0 1.0"), info.UIHud);
-            elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}",
-                                     1, height, "0", "1", TextAnchor.MiddleCenter), info.UIHud);
-
+            var elements = new CuiElementContainer();
+            info.UIHud = elements.Add(new CuiPanel
+            {
+                Image =
+                {
+                    Color = "0.3451 0.5529 0.7725 0.75"
+                },
+                RectTransform =
+                {
+                    AnchorMin = GetAnchorMin("0.60","0.15"),
+                    AnchorMax = GetAnchorMax("0.75","0.25")
+                },
+                CursorEnabled = false
+            });
+            elements.Add(new CuiButton
+            {
+                Button =
+                {
+                    Close = info.UIHud,
+                    Color = "1.0 1.0 0.6078 0.0"
+                },
+                RectTransform =
+                {
+                    AnchorMin = GetAnchorMin("0.9","0.9"),
+                    AnchorMax = GetAnchorMax("0.99","0.99")
+                },
+                Text =
+                {
+                    Text = "X",
+                    FontSize = 20,
+                    Align = TextAnchor.MiddleCenter,
+                    Color = "0.0 0.0 0.0 0.0"
+                }
+            }, info.UIHud);
+            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, height, "0.05","0.95", TextAnchor.MiddleCenter),info.UIHud);
+            elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.3", $"0,1686 {Math.Round(pers.ExpPercent/100)} 0,4314, 0.9"), info.UIHud);
+            elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 1, 1, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
             CuiHelper.AddUi(player, elements);
         }
-
         private void ProfileUI(BasePlayer player)
         {
             GuiInfo info;
@@ -307,19 +335,19 @@ namespace Oxide.Plugins
             elements.Add(CreateLabel($"{pers.SteamName}", 1, height, "0.05", "0.85"), info.UIMain);
             elements.Add(CreateLabel($"Уровень - {pers.CurrentLVL}, доступно ОУ - {pers.UpgradePoints}", 2, height, "0.05", "0.85"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Strength), 3, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup strength-1", 3, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd strength-1", 3, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Perception), 4, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup perception-1", 4, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd perception-1", 4, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Endurance), 5, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup endurance-1", 5, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd endurance-1", 5, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Charisma), 6, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup charisma-1", 6, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd charisma-1", 6, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Intelligense), 7, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup intelligense-1", 7, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd intelligense-1", 7, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Agility), 8, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup agility-1", 8, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd agility-1", 8, height, "+", 15, "0.86", "0.92"), info.UIMain);
             elements.Add(CreateLabel(pers.GetStatString(Characteristics.Luck), 9, height, "0.05", "0.85"), info.UIMain);
-            elements.Add(CreateButton("statup luck-1", 9, height, "+", 15, "0.86", "0.92"), info.UIMain);
+            elements.Add(CreateButton("statup.cmd luck-1", 9, height, "+", 15, "0.86", "0.92"), info.UIMain);
             CuiHelper.AddUi(player, elements);
         }
         #endregion
@@ -348,10 +376,16 @@ namespace AP
         public Perk(Perks perk, int reqLVL, int maxLVL, int cost)
         {
             name = perk.ToString();
+            currentLVL = 1;
             Type = perk;
             RequiredLVL = reqLVL;
             MaxLVL = maxLVL;
             Cost = cost;
+        }
+        public void Increase(int value)
+        {
+            if (currentLVL != MaxLVL)
+                currentLVL += 1;
         }
     }
 
@@ -393,6 +427,8 @@ namespace AP
     {
         public delegate void CharacterStateHandler(BasePlayer player, string mes);
         CharacterStateHandler _handler;
+        public delegate void CharacterLvlUpHandler(APCharacter pers);
+        CharacterLvlUpHandler _lvlHandler;
         public bool isChatSubscriber { get; set; } //выводить сообщения в чат или нет
         private int currentLVL; //текущий уровень персонажа
         public int CurrentLVL { get { return currentLVL; } }
@@ -407,6 +443,7 @@ namespace AP
         public int ExpToNextLvl { get { return expToNextLvl; } }
         private float earnedExpPercent;//количество опыта в процентах, которого не хватает до уровня
         public string EarnedExpPercent { get { return earnedExpPercent.ToString("N2")+"%"; } }
+        public float ExpPercent { get { return earnedExpPercent; } }
         private const int maxLVL = 255; //максимальный уровень персонажа
 
         private const float lvlMultiplier = 1.8f; //множитель для количества опыта для сл. уровня
@@ -537,6 +574,8 @@ namespace AP
             currentLVL += 1; //добавляем уровень
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"Congratulations, you have reached level {CurrentLVL}!");
+            if (_lvlHandler != null)
+                _lvlHandler(this);
             upgradePoints += 1; //добавляем поинты
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"You have {UpgradePoints} skill points!");
@@ -596,15 +635,19 @@ namespace AP
         }
         #endregion
 
-        public void RegHandler(CharacterStateHandler del)
+        public void RegStateHandler(CharacterStateHandler del)
         {
             _handler += del;
             _handler(BasePlayer.FindByID(OwnerId), $"Now you can receive messages about changes to the character in the chat");
         }
-        public void UnregHandler(CharacterStateHandler del)
+        public void UnregStateHandler(CharacterStateHandler del)
         {
             _handler(BasePlayer.FindByID(OwnerId), $"Now you can not receive messages about changes to the character in the chat");
             _handler -= del;
+        }
+        public void RegStateHandler(CharacterLvlUpHandler del)
+        {
+            _lvlHandler += del;
         }
         #endregion
     }
