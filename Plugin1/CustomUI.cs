@@ -30,8 +30,7 @@ namespace Oxide.Plugins
             {
                 GuiInfo info;
                 if (!GUIInfo.TryGetValue(player.userID, out info)) continue;
-                DestroyUI(player, info.UIMain);
-                
+                DestroyUI(player, info.UIMain);   
             }
         }
 
@@ -56,7 +55,8 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
             APCharacter pers = FindOrAddCharacter(player);
-            pers.UnregStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
+            if (pers.isChatSubscriber)
+                pers.UnregStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             pers.UnregStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
             pers.UnregStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
         }
@@ -500,8 +500,8 @@ namespace AP
             //при оверэкспе повышаем уровень и переносим остаток на сл. уровень
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"You got {value} experience points!");
-            if (_lvlHandler != null)
-                _lvlHandler(this);
+            if (_expHandler != null)
+                _expHandler(this);
             if (currentEXP + value > expToNextLvl)
             {
                 int temp = value - (expToNextLvl - currentEXP);
