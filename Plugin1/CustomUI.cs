@@ -3,13 +3,15 @@ using System.Collections.Generic;
 
 using Oxide.Core;
 using Oxide.Game.Rust.Cui;
-using Oxide.Core.Configuration;
+using Oxide.Plugins;
 
 using UnityEngine;
 
 using AP;
 using AP.Keywords;
+
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 namespace Oxide.Plugins
 {
@@ -17,23 +19,12 @@ namespace Oxide.Plugins
     internal class CustomUI : RustPlugin
     {
         private const string plVersion = "0.0.4";
-        private APData Data;
-        private readonly DynamicConfigFile apDataFile;
         private readonly Dictionary<ulong, GuiInfo> GUIInfo;
-        private readonly Dictionary<ulong, APCharacter> APMembers; //тут должны храниться данные игроков
+        private List<APCharacter> APMembers; //тут должны храниться данные игроков
 
         public CustomUI()
         {
             GUIInfo = new Dictionary<ulong, GuiInfo>();
-            apDataFile = Interface.Oxide.DataFileSystem.GetFile(APKeys.DataFileName);
-            if (apDataFile != null)
-            {
-                Data = apDataFile.ReadObject<APData>();
-            }
-            if (Data == null)
-                APMembers = new Dictionary<ulong, APCharacter>();
-            else
-                APMembers = Data.Profile;
         }
         
         #region Hooks
@@ -46,7 +37,23 @@ namespace Oxide.Plugins
                 DestroyUI(player, info.UIMain);
                 DestroyUI(player, info.UIHud);
             }
-            SaveAPData();
+        }
+
+        void Loaded() //происходит до serverinitialize
+        {
+            try
+            {
+                APMembers = Interface.Oxide.DataFileSystem.ReadObject<List<APCharacter>>(APKeys.DataFileName);
+            }
+            catch
+            {
+                Puts("Невозможно наполнить контейнер");
+            }
+            finally
+            {
+                if (APMembers == null)
+                    APMembers = new List<APCharacter>();
+            }
         }
 
         void OnServerInitialized()
@@ -79,13 +86,10 @@ namespace Oxide.Plugins
 
         #region Config
 
-        private void SaveAPData(bool logThis = true) //пытаемся сохранить список персонажей в файл
+        private void SaveAPData(BasePlayer player) //пытаемся сохранить список персонажей в файл
         {
-            Data.Profile = APMembers;
-            if (Data == null) return;
-            apDataFile.WriteObject(Data);
-            if (!logThis) return;
-            Puts(Data.Profile.Count.ToString());
+            Interface.Oxide.DataFileSystem.WriteObject(APKeys.DataFileName, APMembers);
+            ChatMessage(player, APKeys.DataSaved);
         }
         #endregion
 
@@ -101,8 +105,9 @@ namespace Oxide.Plugins
             APCharacter Character;
             if (player.displayName == null) return null;
             if (player.userID < 70000000000) return null;
-            if (!APMembers.TryGetValue(userID, out Character))
-                APMembers[userID] = Character = new APCharacter(player);
+            /*if (!APMembers.TryGetValue(userID, out Character))
+                APMembers[userID] = Character = new APCharacter(player);*/
+            Character = APMembers.Find(x => x.OwnerId == player.userID);
             return Character;      
         }
 
@@ -196,9 +201,13 @@ namespace Oxide.Plugins
             if (!player.IsAdmin) return;
             int value;
             if (!int.TryParse(args[0], out value)) return;
-            APCharacter pers;
-            APMembers.TryGetValue(player.userID, out pers);
+            APCharacter pers = APMembers.Find(x => x.OwnerId == player.userID);
             pers.AddExpirience(value);
+        }
+        [ChatCommand("save")]
+        private void SaveThis(BasePlayer player, string command, string[] args)
+        {
+            SaveAPData(player);
         }
         #endregion
 
@@ -279,6 +288,20 @@ namespace Oxide.Plugins
             GuiInfo info;
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
+            else
+            {
+                if(info.LastHud > Interface.Oxide.Now)
+                {
+                    if(info.LastHudTimer == null)
+                    {
+                        info.LastHudTimer = timer.Once(1, () => ProgressUI(player));
+                        return;
+                    }
+                    info.LastHudTimer?.Destroy();
+                    info.LastHudTimer = null;
+                    info.LastHud = Interface.Oxide.Now + 1;
+                }
+            }
             var pers = FindOrAddCharacter(player);
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
@@ -325,8 +348,7 @@ namespace Oxide.Plugins
         {
             GuiInfo info;
             if (player == null) return;
-            APCharacter pers;
-            APMembers.TryGetValue(player.userID, out pers);
+            APCharacter pers = APMembers.Find(x => x.OwnerId == player.userID);
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
             const float height = 1 / (6f * 1.5f);
@@ -488,6 +510,7 @@ namespace AP
 
         public List<Perk> Perks;
 
+        [JsonConstructor]
         public APCharacter(BasePlayer player)
         {
             ownerId = player.userID;
@@ -700,12 +723,8 @@ namespace AP
     {
         public string UIMain { get; set; }
         public string UIHud { get; set; }
-    }
-
-    public class APData
-    {
-        [JsonProperty(APKeys.Profile)]
-        public Dictionary<ulong, APCharacter> Profile = new Dictionary<ulong, APCharacter>();
+        public float LastHud { get; set; }
+        public Timer LastHudTimer { get; set; }
     }
 }
 
@@ -731,6 +750,6 @@ namespace AP.Keywords
     static class APKeys
     {
         public const string DataFileName = "APData";
-        public const string Profile = "PROFILE";
+        public const string DataSaved = "Data saved successfully";
     }
 }
