@@ -1,26 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using Oxide.Core;
 using Oxide.Game.Rust.Cui;
+using Oxide.Core.Configuration;
 
 using UnityEngine;
 
 using AP;
 using AP.Keywords;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("TestPlugin","WP","0.0.3")]
+    [Info("TestPlugin","WP","0.0.4")]
     internal class CustomUI : RustPlugin
     {
-        private const string plVersion = "0.0.2";
+        private const string plVersion = "0.0.4";
+        private APData Data;
+        private readonly DynamicConfigFile apDataFile;
         private readonly Dictionary<ulong, GuiInfo> GUIInfo;
         private readonly Dictionary<ulong, APCharacter> APMembers; //тут должны храниться данные игроков
 
         public CustomUI()
         {
             GUIInfo = new Dictionary<ulong, GuiInfo>();
-            APMembers = new Dictionary<ulong, APCharacter>();
+            apDataFile = Interface.Oxide.DataFileSystem.GetFile(APKeys.DataFileName);
+            if (apDataFile != null)
+            {
+                Data = apDataFile.ReadObject<APData>();
+            }
+            if (Data == null)
+                APMembers = new Dictionary<ulong, APCharacter>();
+            else
+                APMembers = Data.Profile;
         }
         
         #region Hooks
@@ -30,8 +43,10 @@ namespace Oxide.Plugins
             {
                 GuiInfo info;
                 if (!GUIInfo.TryGetValue(player.userID, out info)) continue;
-                DestroyUI(player, info.UIMain);   
+                DestroyUI(player, info.UIMain);
+                DestroyUI(player, info.UIHud);
             }
+            SaveAPData();
         }
 
         void OnServerInitialized()
@@ -59,6 +74,18 @@ namespace Oxide.Plugins
                 pers.UnregStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             pers.UnregStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
             pers.UnregStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
+        }
+        #endregion
+
+        #region Config
+
+        private void SaveAPData(bool logThis = true) //пытаемся сохранить список персонажей в файл
+        {
+            Data.Profile = APMembers;
+            if (Data == null) return;
+            apDataFile.WriteObject(Data);
+            if (!logThis) return;
+            Puts(Data.Profile.Count.ToString());
         }
         #endregion
 
@@ -150,6 +177,15 @@ namespace Oxide.Plugins
             }
             ChatMessage(player, "Unknown parameter");
         }
+
+        [ChatCommand("guihide")]
+        private void CmdCuiHide(BasePlayer player)
+        {
+            GuiInfo info;
+            if (!GUIInfo.TryGetValue(player.userID, out info)) return;
+            DestroyUI(player, info.UIMain);
+            DestroyUI(player, info.UIHud);
+        }
         #endregion
 
         #region AdminCommands
@@ -167,23 +203,13 @@ namespace Oxide.Plugins
         #endregion
 
         [ChatCommand("cuishow")]
-        private void CmdCuiShow(BasePlayer player /*,string command, string[] args*/)
+        private void CmdCuiShow(BasePlayer player)
         {
             ProgressUI(player);
             ProfileUI(player);
         }
-        
-        [ConsoleCommand("guihide")]
-        private void CmdCuiHide(ConsoleSystem.Arg arg)
-        {
-            BasePlayer player = BasePlayer.Find(arg.Args[0]);
-            GuiInfo info;
-            if (!GUIInfo.TryGetValue(player.userID, out info)) return;
-            DestroyUI(player, info.UIMain);
-        }
 
         #region GUI
-
         private void InitializeGui(BasePlayer player)
         {
             if (player == null) return;
@@ -248,9 +274,7 @@ namespace Oxide.Plugins
                 CursorEnabled = false
             };
         }
-
-        [ChatCommand("expshow")]
-        private void ProgressUI(BasePlayer player) //панелька опыта, не отображается
+        private void ProgressUI(BasePlayer player) //панелька опыта
         {
             GuiInfo info;
             if (!GUIInfo.TryGetValue(player.userID, out info))
@@ -361,12 +385,6 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, elements);
         }
         #endregion
-    }
-
-    public class GuiInfo
-    {
-        public string UIMain { get; set; }
-        public string UIHud { get; set; }
     }  
 }
 
@@ -677,6 +695,18 @@ namespace AP
         }
         #endregion
     }
+
+    public class GuiInfo
+    {
+        public string UIMain { get; set; }
+        public string UIHud { get; set; }
+    }
+
+    public class APData
+    {
+        [JsonProperty(APKeys.Profile)]
+        public Dictionary<ulong, APCharacter> Profile = new Dictionary<ulong, APCharacter>();
+    }
 }
 
 namespace AP.Keywords
@@ -696,5 +726,11 @@ namespace AP.Keywords
     {
         Ghoul = 1,
         AquaMan
+    }
+
+    static class APKeys
+    {
+        public const string DataFileName = "APData";
+        public const string Profile = "PROFILE";
     }
 }
