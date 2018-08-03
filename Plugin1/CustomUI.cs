@@ -37,6 +37,7 @@ namespace Oxide.Plugins
                 DestroyUI(player, info.UIMain);
                 DestroyUI(player, info.UIHud);
             }
+
         }
 
         void Loaded() //происходит до serverinitialize
@@ -65,7 +66,7 @@ namespace Oxide.Plugins
         private void OnPlayerInit(BasePlayer player)
         {
             if (player == null) return;
-            APCharacter pers = FindOrAddCharacter(player);
+            APCharacter pers = FindCharacter(player);
             if(pers.isChatSubscriber)
                 pers.RegStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             pers.RegStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
@@ -76,11 +77,12 @@ namespace Oxide.Plugins
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             if (player == null) return;
-            APCharacter pers = FindOrAddCharacter(player);
+            APCharacter pers = FindCharacter(player);
             if (pers.isChatSubscriber)
                 pers.UnregStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             pers.UnregStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
             pers.UnregStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
+            GUIInfo.Remove(player.userID);
         }
         #endregion
 
@@ -91,6 +93,10 @@ namespace Oxide.Plugins
             Interface.Oxide.DataFileSystem.WriteObject(APKeys.DataFileName, APMembers);
             ChatMessage(player, APKeys.DataSaved);
         }
+        private void SaveAPData() //пытаемся сохранить список персонажей в файл
+        {
+            Interface.Oxide.DataFileSystem.WriteObject(APKeys.DataFileName, APMembers);
+        }
         #endregion
 
         #region Utility
@@ -99,7 +105,12 @@ namespace Oxide.Plugins
             if (!string.IsNullOrEmpty(name)) CuiHelper.DestroyUi(player, name);
         }
 
-        private APCharacter FindOrAddCharacter(BasePlayer player)
+        /// <summary>
+        /// Выполняет поиск по списку персонажей, и возвращает первого с таким ID, если вхождений нет, возвращает нового.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <returns></returns>
+        private APCharacter FindCharacter(BasePlayer player)
         {
             var userID = player.userID;
             APCharacter Character;
@@ -108,7 +119,12 @@ namespace Oxide.Plugins
             /*if (!APMembers.TryGetValue(userID, out Character))
                 APMembers[userID] = Character = new APCharacter(player);*/
             Character = APMembers.Find(x => x.OwnerId == player.userID);
-            return Character;      
+            if(Character == null)
+            {
+                Puts("Персонаж не найден, создаем нового.");
+                Character = new APCharacter(player);
+            }
+            return Character;
         }
 
         private string GetAnchorMin(string xMin, string yMin)
@@ -141,7 +157,7 @@ namespace Oxide.Plugins
         {
             var player = args.Player();
             Characteristics type;
-            APCharacter pers = FindOrAddCharacter(player);
+            APCharacter pers = FindCharacter(player);
             int value = 0;
             string[] pair = args.Args[0].Split('-');
             try
@@ -161,7 +177,7 @@ namespace Oxide.Plugins
         private void ConfigureChat(BasePlayer player, string command, string[] args)//включение и отключение сообщений в чате
         {
             if (player == null) return;
-            var pers = FindOrAddCharacter(player);
+            var pers = FindCharacter(player);
             if (args[0] == "on")
             {
                 if (!pers.isChatSubscriber)
@@ -302,7 +318,7 @@ namespace Oxide.Plugins
                     info.LastHud = Interface.Oxide.Now + 1;
                 }
             }
-            var pers = FindOrAddCharacter(player);
+            var pers = FindCharacter(player);
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
             var elements = new CuiElementContainer();
