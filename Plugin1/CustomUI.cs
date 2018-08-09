@@ -122,8 +122,8 @@ namespace Oxide.Plugins
             if(Character == null)
             {
                 Puts("Персонаж не найден, создаем нового.");
-                Character = new APCharacter(player);
-		APMembers.Add(Character);
+                Character = new APCharacter(player.userID);
+		        APMembers.Add(Character);
             }
             return Character;
         }
@@ -170,7 +170,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                Puts("Unable to convert args[]!, {ex}");
+                Puts($"Unable to convert args[]!, {ex}");
             }    
         } //работает
 
@@ -489,17 +489,7 @@ namespace AP
         public int UpgradePoints;
         public int ExpToNextLvl { get; set; }
         public float EarnedExpPercent {get; set;}//количество опыта в процентах, которого не хватает до уровня
-        public string ExpPercentString 
-                                        {   
-                                            get 
-                                            { 
-                                                return EarnedExpPercent.ToString("N2")+"%";
-                                            }
-                                            set 
-                                            {
-                                                
-                                            }   
-                                        }
+        public string ExpPercentString { get { return EarnedExpPercent.ToString("N2")+"%"; } set  { } }
         private const int maxLVL = 255; //максимальный уровень персонажа
 
         private const float lvlMultiplier = 1.8f; //множитель для количества опыта для сл. уровня
@@ -514,11 +504,11 @@ namespace AP
 
         public List<Perk> Perks;
 
-        public APCharacter(BasePlayer player)
+        public APCharacter(ulong userID)
         {
-            OwnerId = player.userID;
-            this.SteamName = player.displayName;
-            CurrentLVL = 0;
+            OwnerId = userID;
+            this.SteamName = (BasePlayer.FindByID(userID)).displayName;
+            CurrentLVL = 1;
             CurrentEXP = 0;
             UpgradePoints = 5;
             IsChatSubscriber = true;
