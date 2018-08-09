@@ -15,10 +15,10 @@ using Newtonsoft.Json.Serialization;
 
 namespace Oxide.Plugins
 {
-    [Info("TestPlugin","WP","0.0.4")]
+    [Info("TestPlugin","WP","0.0.7")]
     internal class CustomUI : RustPlugin
     {
-        private const string plVersion = "0.0.4";
+        private const string plVersion = "0.0.7";
         private readonly Dictionary<ulong, GuiInfo> GUIInfo;
         private List<APCharacter> APMembers; //тут должны храниться данные игроков
 
@@ -37,7 +37,7 @@ namespace Oxide.Plugins
                 DestroyUI(player, info.UIMain);
                 DestroyUI(player, info.UIHud);
             }
-
+            SaveAPData();
         }
 
         void Loaded() //происходит до serverinitialize
@@ -46,9 +46,9 @@ namespace Oxide.Plugins
             {
                 APMembers = Interface.Oxide.DataFileSystem.ReadObject<List<APCharacter>>(APKeys.DataFileName);
             }
-            catch
+            catch (Exception ex)
             {
-                Puts("Невозможно наполнить контейнер");
+                Puts($"Невозможно наполнить контейнер, {ex}");
             }
             finally
             {
@@ -67,7 +67,7 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
             APCharacter pers = FindCharacter(player);
-            if(pers.isChatSubscriber)
+            if(pers.IsChatSubscriber)
                 pers.RegStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             pers.RegStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
             pers.RegStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
             APCharacter pers = FindCharacter(player);
-            if (pers.isChatSubscriber)
+            if (pers.IsChatSubscriber)
                 pers.UnregStateHandler(new APCharacter.CharacterStateHandler(ChatMessage));
             pers.UnregStateHandler(new APCharacter.CharacterLvlUpHandler(OnCharacterLvlUp));
             pers.UnregStateHandler(new APCharacter.CharacterExpHandler(OnExpValueChanged));
@@ -123,6 +123,7 @@ namespace Oxide.Plugins
             {
                 Puts("Персонаж не найден, создаем нового.");
                 Character = new APCharacter(player);
+		APMembers.Add(Character);
             }
             return Character;
         }
@@ -167,9 +168,9 @@ namespace Oxide.Plugins
                 pers.IncreaseCharacteristic(type, value);
                 ProfileUI(player);
             }
-            catch
+            catch (Exception ex)
             {
-                Puts("Unable to convert args[]!");
+                Puts("Unable to convert args[]!, {ex}");
             }    
         } //работает
 
@@ -180,24 +181,24 @@ namespace Oxide.Plugins
             var pers = FindCharacter(player);
             if (args[0] == "on")
             {
-                if (!pers.isChatSubscriber)
+                if (!pers.IsChatSubscriber)
                 {
-                    pers.isChatSubscriber = true;
+                    pers.IsChatSubscriber = true;
                     pers.RegStateHandler(ChatMessage);
                     return;
                 }
             }
             if (args[0] == "off")
             {
-                if (pers.isChatSubscriber)
+                if (pers.IsChatSubscriber)
                 {
-                    pers.isChatSubscriber = false;
+                    pers.IsChatSubscriber = false;
                     pers.UnregStateHandler(ChatMessage);
                     return;
                 }
             }
             ChatMessage(player, "Unknown parameter");
-        }
+        }//работает
 
         [ChatCommand("guihide")]
         private void CmdCuiHide(BasePlayer player)
@@ -206,7 +207,7 @@ namespace Oxide.Plugins
             if (!GUIInfo.TryGetValue(player.userID, out info)) return;
             DestroyUI(player, info.UIMain);
             DestroyUI(player, info.UIHud);
-        }
+        }//работает
         #endregion
 
         #region AdminCommands
@@ -305,19 +306,7 @@ namespace Oxide.Plugins
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
             else
-            {
-                if(info.LastHud > Interface.Oxide.Now)
-                {
-                    if(info.LastHudTimer == null)
-                    {
-                        info.LastHudTimer = timer.Once(1, () => ProgressUI(player));
-                        return;
-                    }
-                    info.LastHudTimer?.Destroy();
-                    info.LastHudTimer = null;
-                    info.LastHud = Interface.Oxide.Now + 1;
-                }
-            }
+                DestroyUI(player, info.UIHud);
             var pers = FindCharacter(player);
             if (!string.IsNullOrEmpty(info.UIHud))
                 DestroyUI(player, info.UIHud);
@@ -355,8 +344,8 @@ namespace Oxide.Plugins
                     Color = "0.0 0.0 0.0 0.0"
                 }
             }, info.UIHud);
-            elements.Add(CreateLabel($"{pers.EarnedExpPercent}, {pers.CurrentLVL} level", 1, 0.68f, "0.05", "0.95", TextAnchor.MiddleCenter, 17), info.UIHud);
-            elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.35", $"0,1686 {Math.Round(pers.ExpPercent / 100)} 0,4314, 0.9"), info.UIHud);
+            elements.Add(CreateLabel($"{pers.ExpPercentString}, {pers.CurrentLVL} level", 1, 0.68f, "0.05", "0.95", TextAnchor.MiddleCenter, 17), info.UIHud);
+            elements.Add(CreatePanel("0.05", "0.95", "0.1", "0.35", $"0,1686 {Math.Round(pers.EarnedExpPercent / 100)} 0,4314, 0.9"), info.UIHud);
             elements.Add(CreateLabel($"{pers.CurrentEXP}/{pers.ExpToNextLvl}", 1, 1.55f, "0.05", "0.95", TextAnchor.MiddleCenter), info.UIHud);
             CuiHelper.AddUi(player, elements);
         }
@@ -367,9 +356,9 @@ namespace Oxide.Plugins
             APCharacter pers = APMembers.Find(x => x.OwnerId == player.userID);
             if (!GUIInfo.TryGetValue(player.userID, out info))
                 GUIInfo[player.userID] = info = new GuiInfo();
-            const float height = 1 / (6f * 1.5f);
-            if (!string.IsNullOrEmpty(info.UIMain))
+            else
                 DestroyUI(player, info.UIMain);
+            const float height = 1 / (6f * 1.5f);   
             var elements = new CuiElementContainer();
             info.UIMain = elements.Add(new CuiPanel
             {
@@ -430,45 +419,40 @@ namespace AP
 {
     public class Perk
     {
-        private int currentLVL;
-        private string name;
-        public string Name { get { return name; } } // Название способности
+        public string Name { get; set; } // Название способности
         public Perks Type; //Тип из перечисления
         public int RequiredLVL;//Требуемый уровень характеристики
-        public int MaxLVL;//Максимальный уровень способности
-        public int CurrentLVL { get { return currentLVL; } }
-        private int Cost;
+        public int MaxLVL = 3;//Максимальный уровень способности
+        public int CurrentLVL { get; set; }
+        public int Cost = 3;
 
-        public Perk(Perks perk, int reqLVL, int maxLVL, int cost)
+        public Perk(Perks perk, int reqLVL)
         {
-            name = perk.ToString();
-            currentLVL = 1;
+            Name = perk.ToString();
+            CurrentLVL = 1;
             Type = perk;
             RequiredLVL = reqLVL;
-            MaxLVL = maxLVL;
-            Cost = cost;
         }
         public void Increase(int value)
         {
-            if (currentLVL != MaxLVL)
-                currentLVL += 1;
+            if (CurrentLVL != MaxLVL)
+                CurrentLVL += 1;
         }
     }
 
     public class Characteristic
     {
-        private int currentLVL;
-        public int CurrentLVL { get { return currentLVL; } }
-        public string Name { get; }
-        public Characteristics Type { get; }
-        private const int MaxLVL = 10;
-        private int Cost = 1;
+        public int CurrentLVL { get; set; }
+        public string Name { get; set; }
+        public Characteristics Type { get; set; }
+        public int MaxLVL = 10;
+        public int Cost = 1;
 
         public Characteristic(Characteristics stat)
         {
             Name = stat.ToString();
             Type = stat;
-            currentLVL = 1;
+            CurrentLVL = 1;
         }
         /// <summary>
         /// Увеличивает хар-ку, value - значение, на которое увеличивается, points  - ссылка на upgradePoints
@@ -477,9 +461,9 @@ namespace AP
         /// <param name="points"></param>
         public void Increase(int value, ref int points)
         {
-            if (currentLVL != MaxLVL)
+            if (CurrentLVL != MaxLVL)
             {
-                currentLVL += value;
+                CurrentLVL += value;
                 points -= Cost * value;
             }
             else
@@ -497,45 +481,48 @@ namespace AP
         CharacterLvlUpHandler _lvlHandler;
         public delegate void CharacterExpHandler(APCharacter pers);
         CharacterExpHandler _expHandler;
-        public bool isChatSubscriber { get; set; } //выводить сообщения в чат или нет
-        private int currentLVL; //текущий уровень персонажа
-        public int CurrentLVL { get { return currentLVL; } }
-        private int currentEXP; //текущее количество опыта персонажа
-        public int CurrentEXP { get { return currentEXP; } }
-        private ulong ownerId; // Rust айди игрока
-        public ulong OwnerId { get { return ownerId; } }
+        public bool IsChatSubscriber { get; set; } //выводить сообщения в чат или нет
+        public int CurrentLVL { get; set; }
+        public int CurrentEXP { get; set; }
+        public ulong OwnerId { get; set; }
         public string SteamName { get; set; }
-        private int upgradePoints; //количество очков улучшения
-        public int UpgradePoints { get { return upgradePoints; } }
-        private int expToNextLvl; //общее количество опыта для повышения уровня
-        public int ExpToNextLvl { get { return expToNextLvl; } }
-        private float earnedExpPercent;//количество опыта в процентах, которого не хватает до уровня
-        public string EarnedExpPercent { get { return earnedExpPercent.ToString("N2")+"%"; } }
-        public float ExpPercent { get { return earnedExpPercent; } }
+        public int UpgradePoints;
+        public int ExpToNextLvl { get; set; }
+        public float EarnedExpPercent {get; set;}//количество опыта в процентах, которого не хватает до уровня
+        public string ExpPercentString 
+                                        {   
+                                            get 
+                                            { 
+                                                return EarnedExpPercent.ToString("N2")+"%";
+                                            }
+                                            set 
+                                            {
+                                                
+                                            }   
+                                        }
         private const int maxLVL = 255; //максимальный уровень персонажа
 
         private const float lvlMultiplier = 1.8f; //множитель для количества опыта для сл. уровня
 
-        private Characteristic Strength;
-        private Characteristic Perception;
-        private Characteristic Endurance;
-        private Characteristic Charisma;
-        private Characteristic Intelligense;
-        private Characteristic Agility;
-        private Characteristic Luck;
+        public Characteristic Strength { get; set; }
+        public Characteristic Perception { get; set; }
+        public Characteristic Endurance { get; set; }
+        public Characteristic Charisma { get; set; }
+        public Characteristic Intelligense { get; set; }
+        public Characteristic Agility { get; set; }
+        public Characteristic Luck { get; set; }
 
         public List<Perk> Perks;
 
-        [JsonConstructor]
         public APCharacter(BasePlayer player)
         {
-            ownerId = player.userID;
+            OwnerId = player.userID;
             this.SteamName = player.displayName;
-            currentLVL = 0;
-            currentEXP = 0;
-            upgradePoints = 5;
-            isChatSubscriber = true;
-            expToNextLvl = (int)Math.Round(180*lvlMultiplier);
+            CurrentLVL = 0;
+            CurrentEXP = 0;
+            UpgradePoints = 5;
+            IsChatSubscriber = true;
+            ExpToNextLvl = (int)Math.Round(180*lvlMultiplier);
             Strength = new Characteristic(Characteristics.Strength);
             Perception = new Characteristic(Characteristics.Perception);
             Endurance = new Characteristic(Characteristics.Endurance);
@@ -553,15 +540,15 @@ namespace AP
         public bool AddExpirience(int value)
         {
             if (value < 0) return false; //если передано отрицательное число
-            if (currentLVL == maxLVL) return false; // если достигнут максимальный уровень
+            if (CurrentLVL == maxLVL) return false; // если достигнут максимальный уровень
             //при оверэкспе повышаем уровень и переносим остаток на сл. уровень
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"You got {value} experience points!");
             if (_expHandler != null)
                 _expHandler(this);
-            if (currentEXP + value > expToNextLvl)
+            if (CurrentEXP + value > ExpToNextLvl)
             {
-                int temp = value - (expToNextLvl - currentEXP);
+                int temp = value - (ExpToNextLvl - CurrentEXP);
                 CharacterLVLUP();
                 AddExpirience(temp);
                 return true;
@@ -569,7 +556,7 @@ namespace AP
             else
             {
                 //при достижении границы перехода повышаем уровень и сбрасываем очки опыта до 0
-                if (currentEXP + value == expToNextLvl)
+                if (CurrentEXP + value == ExpToNextLvl)
                 {
                     CharacterLVLUP();
                     OnExpValueChanged();
@@ -577,7 +564,7 @@ namespace AP
                 }
                 else //просто добавляем опыт
                 {
-                    currentEXP += value;
+                    CurrentEXP += value;
                     OnExpValueChanged();
                     return true;
                 }
@@ -585,7 +572,7 @@ namespace AP
         }
         public void IncreaseCharacteristic(Characteristics type, int value)
         {
-            if (this.upgradePoints < value)
+            if (this.UpgradePoints < value)
             {
                 if (_handler != null)
                     _handler(BasePlayer.FindByID(OwnerId), $"Not enough skill points!");
@@ -594,37 +581,37 @@ namespace AP
             switch (type)
             {
                 case Characteristics.Strength:
-                    this.Strength.Increase(value, ref upgradePoints);
+                    this.Strength.Increase(value, ref UpgradePoints);
                     if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Strength is increased by {value}");
                     break;
                 case Characteristics.Perception:
-                    this.Perception.Increase(value, ref upgradePoints);
+                    this.Perception.Increase(value, ref UpgradePoints);
                     if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Perception is increased by {value}");
                     break;
                 case Characteristics.Endurance:
-                    this.Endurance.Increase(value, ref upgradePoints);
+                    this.Endurance.Increase(value, ref UpgradePoints);
                     if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Endurance is increased by {value}");
                     break;
                 case Characteristics.Charisma:
-                    this.Charisma.Increase(value, ref upgradePoints);
+                    this.Charisma.Increase(value, ref UpgradePoints);
                     if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Charisma is increased by {value}");
                     break;
                 case Characteristics.Intelligense:
-                    this.Intelligense.Increase(value, ref upgradePoints);
+                    this.Intelligense.Increase(value, ref UpgradePoints);
                     if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Intelligense is increased by {value}");
                     break;
                 case Characteristics.Agility:
-                    this.Agility.Increase(value, ref upgradePoints);
+                    this.Agility.Increase(value, ref UpgradePoints);
                     if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Agility is increased by {value}");
                     break;
                 case Characteristics.Luck:
-                    this.Luck.Increase(value, ref upgradePoints); if (_handler != null)
+                    this.Luck.Increase(value, ref UpgradePoints); if (_handler != null)
                         _handler(BasePlayer.FindByID(OwnerId), $"Your Luck is increased by {value}");
                     break;
             }
@@ -635,23 +622,23 @@ namespace AP
         /// </summary>
         private void OnExpValueChanged()
         {
-            earnedExpPercent = ((currentEXP * 100) / expToNextLvl);
+            EarnedExpPercent = ((CurrentEXP * 100) / ExpToNextLvl);
         }
         /// <summary>
         /// Повышение уровня персонажа, если reduceExp = true, сбрасываем опыт до 0, если false, значение опыта не изменяется
         /// </summary>
         private void CharacterLVLUP()
         {
-            currentLVL += 1; //добавляем уровень
+            CurrentLVL += 1; //добавляем уровень
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"Congratulations, you have reached level {CurrentLVL}!");
             if (_lvlHandler != null)
                 _lvlHandler(this);
-            upgradePoints += 1; //добавляем поинты
+            UpgradePoints += 1; //добавляем поинты
             if (_handler != null)
                 _handler(BasePlayer.FindByID(OwnerId), $"You have {UpgradePoints} skill points!");
-            currentEXP = 0;
-            expToNextLvl = currentLVL * (int)Math.Round((180 * lvlMultiplier) * lvlMultiplier); //определяемый кол-во опыта для сл. уровня
+            CurrentEXP = 0;
+            ExpToNextLvl = CurrentLVL * (int)Math.Round((180 * lvlMultiplier) * lvlMultiplier); //определяемый кол-во опыта для сл. уровня
         }
         #region Characteristic return
         public int GetStrenght()
@@ -739,8 +726,6 @@ namespace AP
     {
         public string UIMain { get; set; }
         public string UIHud { get; set; }
-        public float LastHud { get; set; }
-        public Timer LastHudTimer { get; set; }
     }
 }
 
